@@ -8,14 +8,14 @@ on:
 jobs:
   deploy:
     name: Deploy to GitHub Pages
-    runs-on: Ubuntu-20.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install wasm binary toolchain
-        run: sudo apt update && sudo apt install wabt binaryen
+        run: sudo apt update && sudo apt install -y clang llvm wabt binaryen
 
       - name: Setup Rust
         run: rustup target add wasm32-unknown-unknown
