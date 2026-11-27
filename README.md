@@ -24,3 +24,8 @@ Demo at <https://diekmann.github.io/wasm-fizzbuzz/rust/>, deployed from (Part 3)
 
 Play doom at <https://diekmann.github.io/wasm-fizzbuzz/doom/>, deployed from (Part 4) via GitHub Actions to GitHub Pages..
 
+---
+
+This is a fork of [diekmann/wasm-fizzbuzz](https://github.com/diekmann/wasm-fizzbuzz) that adds sound effects and music to DooM, plays the demos on the title screen, and builds with current LLVM.
+See [Changes in this fork](doom/README.md#changes-in-this-fork).
+

@@ -690,3 +690,47 @@ Ultimately, Firefox performance tooling confirms that, while we are playing DooM
 ---
 
 Now go to https://diekmann.github.io/wasm-fizzbuzz/doom and start shooting monsters!
+
+---
+
+## Changes in this fork
+
+This fork adds the following to the port above.
+
+### Building with current LLVM
+
+The build uses the unversioned `llvm-ar` and `llvm-ranlib`, so any recent LLVM works.
+Clang 15 and later reject K&R era C by default, so musl and Doom are built with `-Wno-error` for implicit declarations, implicit `int`, and pointer conversions.
+On Ubuntu 24.04:
+
+```bash
+sudo apt install clang llvm wabt binaryen
+rustup target add wasm32-unknown-unknown
+make
+```
+
+### Demos on the title screen
+
+The shareware `doom1.wad` holds demos recorded by Doom 1.9, version 109, which linuxdoom 1.10 refuses to play, so the title screen only cycled through text screens.
+`G_DoPlayDemo` in `g_game.c` now accepts version 109 as well, and the demos play behind the title screen.
+
+The default `screenblocks` in `m_misc.c` is 10, so the game opens with a full width view above the status bar.
+
+### Sound effects and music
+
+The original `i_sound.c` wrote to a Linux sound device and was stubbed out for wasm.
+It is now a pull based mixer:
+
+* `i_sound.c` mixes up to 8 channels of the WAD's 8 bit sound effects, with linuxdoom's stereo separation and volume.
+* `i_music.c` plays the WAD's MUS music on an emulated OPL2 chip with the WAD's `GENMIDI` instruments, following the voice allocation of Doom 1.9's DMX library. The logic and tables are adapted from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)'s `i_oplmusic.c`.
+* `opl3/` is the [Nuked OPL3](https://github.com/nukeykt/Nuked-OPL3) emulator.
+* `src/sound.rs` exports `doom_audio_mix(out, frames, rate)`, which fills `out` with `frames` interleaved stereo 16 bit samples at `rate` Hz.
+
+`main.js` calls `doom_audio_mix` after each game loop step and schedules the samples on a Web Audio `AudioContext`, about 100 ms ahead.
+Browsers keep audio suspended until the page gets a click or key press, and until then the samples are mixed and dropped at the same pace, so the music is in the right place once sound starts.
+
+### Licenses
+
+The Doom sources were released under the GNU GPL v2 in 1999, after the `DOOMLIC.TXT` license that ships in `linuxdoom-1.10`.
+`i_music.c` is adapted from Chocolate Doom, under the GNU GPL v2 or later.
+Nuked OPL3 is under the GNU LGPL v2.1, see `opl3/LICENSE`.
