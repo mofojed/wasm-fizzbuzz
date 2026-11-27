@@ -40,6 +40,7 @@ fn main() {
 
     // original Doom Sources
     println!("cargo:rerun-if-changed={}", DOON_SRC);
+    println!("cargo:rerun-if-changed=opl3");
     let status = Command::new("make")
         .args(&["-C", DOON_SRC, "linux/liblinuxxdoom.a"])
         .status()

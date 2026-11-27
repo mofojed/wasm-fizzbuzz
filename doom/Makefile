@@ -1,6 +1,6 @@
 BUILDDIR = target/wasm32-unknown-unknown/release
 
-doom.wasm: src/*.rs clang_compiler_rt/* linuxdoom-1.10/*  musl-1.2.2/*
+doom.wasm: src/*.rs clang_compiler_rt/* linuxdoom-1.10/*  musl-1.2.2/* opl3/*
 	 cargo build --release
 	 # As log as wasm-ld does not look like it supports LTO for C/Rust cross-language LTO, binaryen is the best we have.
 	 # TODO: use https://doc.rust-lang.org/rustc/linker-plugin-lto.html once it works for wasm.

@@ -279,7 +279,7 @@ default_t	defaults[] =
     {"screenblocks",&screenblocks, 10},  // full width view above the status bar
     {"detaillevel",&detailLevel, 0},
 
-    {"snd_channels",&numChannels, 3},
+    {"snd_channels",&numChannels, 8},
 
 
 

@@ -5,6 +5,7 @@ mod gamefile;
 pub mod js_imports;
 mod malloc;
 mod printf;
+mod sound;
 mod unimplemented_libc;
 mod video;
 

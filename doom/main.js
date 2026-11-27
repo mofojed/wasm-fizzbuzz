@@ -76,6 +76,72 @@ function drawCanvas(ptr) {
     ++number_of_draws;
 }
 
+/*sound: Doom mixes music and sound effects when asked, and Web Audio plays them a little ahead of time*/
+const AUDIO_CHUNK_FRAMES = 1024;
+const AUDIO_LEAD_SECONDS = 0.1;
+var audioContext = null;
+var audioPointer = 0;
+var audioNextTime = 0;
+var audioMutedSince = 0;
+
+function startAudio(exports) {
+    audioContext = new AudioContext();
+    audioPointer = exports.malloc(AUDIO_CHUNK_FRAMES * 4);
+    audioMutedSince = performance.now();
+}
+
+/*Browsers only start audio after the user interacts with the page.*/
+function resumeAudio() {
+    if (audioContext && audioContext.state !== "running") {
+        audioContext.resume();
+    }
+}
+
+function mixAudio(exports, frames) {
+    exports.doom_audio_mix(audioPointer, frames, audioContext.sampleRate);
+    return new Int16Array(memory.buffer, audioPointer, frames * 2);
+}
+
+function pumpAudio(exports) {
+    const rate = audioContext.sampleRate;
+    if (audioContext.state !== "running") {
+        /*Mix and drop the audio while muted, so the music keeps time with the game and sounds don't pile up.*/
+        const now = performance.now();
+        var frames = Math.floor((now - audioMutedSince) / 1000 * rate);
+        if (frames > rate) {
+            /*Animation frames stop in background tabs. Don't catch up on all of it.*/
+            audioMutedSince = now - 1000 * AUDIO_CHUNK_FRAMES / rate;
+            frames = AUDIO_CHUNK_FRAMES;
+        }
+        while (frames >= AUDIO_CHUNK_FRAMES) {
+            mixAudio(exports, AUDIO_CHUNK_FRAMES);
+            frames -= AUDIO_CHUNK_FRAMES;
+            audioMutedSince += AUDIO_CHUNK_FRAMES / rate * 1000;
+        }
+        audioNextTime = 0;
+        return;
+    }
+    audioMutedSince = performance.now();
+    if (audioNextTime < audioContext.currentTime) {
+        audioNextTime = audioContext.currentTime + 0.02;
+    }
+    while (audioNextTime < audioContext.currentTime + AUDIO_LEAD_SECONDS) {
+        const samples = mixAudio(exports, AUDIO_CHUNK_FRAMES);
+        const buffer = audioContext.createBuffer(2, AUDIO_CHUNK_FRAMES, rate);
+        const left = buffer.getChannelData(0);
+        const right = buffer.getChannelData(1);
+        for (var i = 0; i < AUDIO_CHUNK_FRAMES; ++i) {
+            left[i] = samples[i * 2] / 32768;
+            right[i] = samples[i * 2 + 1] / 32768;
+        }
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.start(audioNextTime);
+        audioNextTime += AUDIO_CHUNK_FRAMES / rate;
+    }
+}
+
 /*These functions will be available in WebAssembly. We also share the memory to share larger amounts of data with javascript, e.g. strings of the video output.*/
 var importObject = {
     js: {
@@ -95,6 +161,7 @@ WebAssembly.instantiateStreaming(fetch('doom.wasm'), importObject)
 
     /*Initialize Doom*/
     obj.instance.exports.main();
+    startAudio(obj.instance.exports);
 
 
     /*input handling*/
@@ -130,6 +197,7 @@ WebAssembly.instantiateStreaming(fetch('doom.wasm'), importObject)
 
     /*keyboard input*/
     canvas.addEventListener('keydown', function(event) {
+        resumeAudio();
         keyDown(doomKeyCode(event.keyCode));
         event.preventDefault();
     }, false);
@@ -150,7 +218,7 @@ WebAssembly.instantiateStreaming(fetch('doom.wasm'), importObject)
         console.log(elementID + " for " + keyCode);
         var button = document.getElementById(elementID);
         //button.addEventListener("click", () => {keyDown(keyCode); keyUp(keyCode)} );
-        button.addEventListener("touchstart", () => keyDown(keyCode));
+        button.addEventListener("touchstart", () => {resumeAudio(); keyDown(keyCode);});
         button.addEventListener("touchend", () => keyUp(keyCode));
         button.addEventListener("touchcancel", () => keyUp(keyCode));
     });
@@ -162,6 +230,7 @@ WebAssembly.instantiateStreaming(fetch('doom.wasm'), importObject)
         focushint.style.fontWeight = "normal";
     };
     canvas.addEventListener('focusin', printFocusInHint, false);
+    canvas.addEventListener('pointerdown', resumeAudio, false);
 
     canvas.addEventListener('focusout', function(e) {
         focushint.innerText = "Click on the canvas to capute input and start playing.";
@@ -183,6 +252,7 @@ WebAssembly.instantiateStreaming(fetch('doom.wasm'), importObject)
     function step(timestamp) {
         ++number_of_animation_frames;
         obj.instance.exports.doom_loop_step();
+        pumpAudio(obj.instance.exports);
         window.requestAnimationFrame(step);
     }
     window.requestAnimationFrame(step);

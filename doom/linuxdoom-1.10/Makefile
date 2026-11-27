@@ -11,7 +11,7 @@ AR=llvm-ar
 # apt install lld
 # ln -s /usr/bin/wasm-ld-10 /usr/bin/wasm-ld # ugly!
 ##############TODO:::: use -I musl built_inc/!!!!!
-WASM32_CFLAGS=--target=wasm32 -nostdlib -ffreestanding -nostdinc -I../musl-1.2.2/built_inc/include/
+WASM32_CFLAGS=--target=wasm32 -nostdlib -ffreestanding -nostdinc -I../musl-1.2.2/built_inc/include/ -I../opl3/
 
 # doom was written with the implicit assumption that ints and pointers are 32bit.
 # Adding -m32 to make it compile on 64bit archs.
@@ -36,6 +36,8 @@ OBJS=				\
 		$(O)/dstrings.o		\
 		$(O)/i_system.o		\
 		$(O)/i_sound.o		\
+		$(O)/i_music.o		\
+		$(O)/opl3.o		\
 		$(O)/i_net.o			\
 		$(O)/tables.o			\
 		$(O)/f_finale.o		\
@@ -104,6 +106,11 @@ $(O)/linuxxdoom:	$(OBJS) $(O)/i_main.o
 	-o $(O)/linuxxdoom $(LIBS)
 
 $(O)/%.o:	%.c
+	mkdir -p $(O)
+	$(CC) $(CFLAGS) -nostdlib  -c $< -o $@
+
+# Nuked OPL3, the FM synth for music.
+$(O)/opl3.o:	../opl3/opl3.c ../opl3/opl3.h
 	mkdir -p $(O)
 	$(CC) $(CFLAGS) -nostdlib  -c $< -o $@
 

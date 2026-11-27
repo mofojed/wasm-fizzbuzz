@@ -112,6 +112,9 @@ void I_StopSong(int handle);
 // See above (register), then think backwards
 void I_UnRegisterSong(int handle);
 
+// Fills out with frames interleaved stereo 16 bit samples at rate Hz.
+void I_MixAudio(short* out, int frames, int rate);
+
 
 
 #endif
