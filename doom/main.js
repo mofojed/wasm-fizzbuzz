@@ -122,7 +122,7 @@ function pumpAudio(exports) {
         return;
     }
     audioMutedSince = performance.now();
-    if (audioNextTime < audioContext.currentTime) {
+    if (audioNextTime <= audioContext.currentTime) {
         audioNextTime = audioContext.currentTime + 0.02;
     }
     while (audioNextTime < audioContext.currentTime + AUDIO_LEAD_SECONDS) {
