@@ -1586,12 +1586,15 @@ void G_DoPlayDemo (void)
 	 
     gameaction = ga_nothing; 
     demobuffer = demo_p = W_CacheLumpName (defdemoname, PU_STATIC); 
-    if ( *demo_p++ != VERSION)
+    // The IWAD's demos were recorded by Doom 1.9 (version 109). 1.10 only
+    // changed the version number, so they still play back in sync.
+    if ( *demo_p != VERSION && *demo_p != 109)
     {
       fprintf( stderr, "Demo is from a different game version!\n");
       gameaction = ga_nothing;
       return;
     }
+    demo_p++;
     
     skill = *demo_p++; 
     episode = *demo_p++; 
