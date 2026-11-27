@@ -729,6 +729,22 @@ It is now a pull based mixer:
 `main.js` calls `doom_audio_mix` after each game loop step and schedules the samples on a Web Audio `AudioContext`, about 100 ms ahead.
 Browsers keep audio suspended until the page gets a click or key press, and until then the samples are mixed and dropped at the same pace, so the music is in the right place once sound starts.
 
+### Doom II and other IWADs
+
+The IWAD is no longer compiled into `doom.wasm` with `include_bytes!`, so the game is not tied to the shareware `doom1.wad`, and DOOM II's commercial `doom2.wad` never has to be committed or deployed.
+
+* `main.js` loads the IWAD and copies it into the buffer that `src/gamefile.rs` exports as `doom_iwad_buffer(len)`, before it calls `main`.
+  By default it fetches `doom1.wad`, which `make gh-pages` copies next to `index.html`.
+  `?wad=doom2.wad` fetches another IWAD from next to `index.html`, and the file picker on the page plays an IWAD from your disk without uploading it.
+  Doom can't restart itself, so a new IWAD starts a new `WebAssembly.Instance` with a fresh `WebAssembly.Memory`.
+* `IdentifyVersion` in `d_main.c` picks the game by the IWAD's file name.
+  `src/gamefile.rs` looks at the IWAD's lumps instead, and only reports the matching name to `access` and `open`: `doom2.wad` for `MAP01` (DOOM II, Final DOOM, and Freedoom: Phase 2), `doomu.wad` for `E4M1`, `doom.wad` for `E2M1`, and `doom1.wad` otherwise.
+  TNT and Plutonia play as DOOM II, since linuxdoom 1.10 has no Final DOOM level names or texts.
+* The default `mb_used` in `m_misc.c` is 16, for a 16 MB zone. With linuxdoom's 2 MB, DOOM II runs out of memory while caching its sound effects.
+* The `idclev` cheat in `st_stuff.c` never worked in DOOM II, since it set the episode to 0 and then rejected episodes below 1. It now uses episode 1, and rejects `MAP33` and above, which DOOM II doesn't have.
+
+To play DOOM II locally, put your `doom2.wad` in `doom/`, where `.gitignore` keeps it out of git, run `make run_wasm`, and open <http://127.0.0.1:8000/?wad=doom2.wad>.
+
 ### Licenses
 
 The Doom sources were released under the GNU GPL v2 in 1999, after the `DOOMLIC.TXT` license that ships in `linuxdoom-1.10`.
