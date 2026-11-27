@@ -683,7 +683,8 @@ ST_Responder (event_t* ev)
       
       if (gamemode == commercial)
       {
-	epsd = 0;
+	// Doom II has no episodes. 0 failed the check below, so idclev never worked.
+	epsd = 1;
 	map = (buf[0] - '0')*10 + buf[1] - '0';
       }
       else
@@ -713,7 +714,7 @@ ST_Responder (event_t* ev)
 	return false;
 
       if ((gamemode == commercial)
-	&& (( epsd > 1) || (map > 34)))
+	&& (( epsd > 1) || (map > 32)))  // MAP33 and MAP34 don't exist
 	return false;
 
       // So be it.

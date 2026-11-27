@@ -1,5 +1,9 @@
 'use strict';
-var memory = new WebAssembly.Memory({ initial : 108 });
+/*Each game gets a fresh memory and instance, see startDoom.*/
+var memory = null;
+var doom = null; // exports of the running game
+var doomGeneration = 0;
+const doomModule = WebAssembly.compileStreaming(fetch('doom.wasm'));
 
 /*stdout and stderr goes here*/
 const output = document.getElementById("output");
@@ -14,20 +18,24 @@ function consoleLogString(offset, length) {
     console.log("\"" + string + "\"");
 }
 
+function appendText(style, text) {
+    const lines = text.split('\n');
+    for (var i=0; i<lines.length; ++i) {
+        if (lines[i].length == 0) {
+            continue;
+        }
+        var t = document.createElement("span");
+        t.classList.add(style);
+        t.appendChild(document.createTextNode(lines[i]));
+        output.appendChild(t);
+        output.appendChild(document.createElement("br"));
+        t.scrollIntoView({behavior: "smooth", block: "end", inline: "nearest"}); /*smooth scrolling is experimental according to MDN*/
+    }
+}
+
 function appendOutput(style) {
     return function(offset, length) {
-        const lines = readWasmString(offset, length).split('\n');
-        for (var i=0; i<lines.length; ++i) {
-            if (lines[i].length == 0) {
-                continue;
-            }
-            var t = document.createElement("span");
-            t.classList.add(style);
-            t.appendChild(document.createTextNode(lines[i]));
-            output.appendChild(t);
-            output.appendChild(document.createElement("br"));
-            t.scrollIntoView({behavior: "smooth", block: "end", inline: "nearest"}); /*smooth scrolling is experimental according to MDN*/
-        }
+        appendText(style, readWasmString(offset, length));
     }
 }
 
@@ -85,9 +93,12 @@ var audioNextTime = 0;
 var audioMutedSince = 0;
 
 function startAudio(exports) {
-    audioContext = new AudioContext();
+    if (!audioContext) {
+        audioContext = new AudioContext();
+    }
     audioPointer = exports.malloc(AUDIO_CHUNK_FRAMES * 4);
     audioMutedSince = performance.now();
+    audioNextTime = 0;
 }
 
 /*Browsers only start audio after the user interacts with the page.*/
@@ -143,117 +154,177 @@ function pumpAudio(exports) {
 }
 
 /*These functions will be available in WebAssembly. We also share the memory to share larger amounts of data with javascript, e.g. strings of the video output.*/
-var importObject = {
-    js: {
-        js_console_log: appendOutput("log"),
-        js_stdout: appendOutput("stdout"),
-        js_stderr: appendOutput("stderr"),
-        js_milliseconds_since_start: getMilliseconds,
-        js_draw_screen: drawCanvas,
-    },
-    env: {
-        memory: memory
-    }
-};
-
-WebAssembly.instantiateStreaming(fetch('doom.wasm'), importObject)
-    .then(obj => {
-
-    /*Initialize Doom*/
-    obj.instance.exports.main();
-    startAudio(obj.instance.exports);
-
-
-    /*input handling*/
-    let doomKeyCode = function(keyCode) {
-        // Doom seems to use mostly the same keycodes, except for the following (maybe I'm missing a few.)
-        switch (keyCode) {
-        case 8:
-            return 127; // KEY_BACKSPACE
-        case 17:
-            return (0x80+0x1d); // KEY_RCTRL
-        case 18:
-            return (0x80+0x38); // KEY_RALT
-        case 37:
-            return 0xac; // KEY_LEFTARROW
-        case 38:
-            return 0xad; // KEY_UPARROW
-        case 39:
-            return 0xae; // KEY_RIGHTARROW
-        case 40:
-            return 0xaf; // KEY_DOWNARROW
-        default:
-            if (keyCode >= 65 /*A*/ && keyCode <= 90 /*Z*/) {
-            return keyCode + 32; // ASCII to lower case
-            }
-            if (keyCode >= 112 /*F1*/ && keyCode <= 123 /*F12*/ ) {
-            return keyCode + 75; // KEY_F1
-            }
-            return keyCode;
+function makeImportObject() {
+    return {
+        js: {
+            js_console_log: appendOutput("log"),
+            js_stdout: appendOutput("stdout"),
+            js_stderr: appendOutput("stderr"),
+            js_milliseconds_since_start: getMilliseconds,
+            js_draw_screen: drawCanvas,
+        },
+        env: {
+            memory: memory
         }
     };
-    let keyDown = function(keyCode) {obj.instance.exports.add_browser_event(0 /*KeyDown*/, keyCode);};
-    let keyUp = function(keyCode) {obj.instance.exports.add_browser_event(1 /*KeyUp*/, keyCode);};
+}
 
-    /*keyboard input*/
-    canvas.addEventListener('keydown', function(event) {
-        resumeAudio();
-        keyDown(doomKeyCode(event.keyCode));
-        event.preventDefault();
-    }, false);
-    canvas.addEventListener('keyup', function(event) {
-        keyUp(doomKeyCode(event.keyCode));
-        event.preventDefault();
-    }, false);
+/*Starts Doom with an IWAD, e.g. doom1.wad or doom2.wad. Doom can't restart itself, so a new game gets a new instance.*/
+async function startDoom(wad, name) {
+    if (wad.length < 12 || String.fromCharCode(...wad.subarray(0, 4)) !== "IWAD") {
+        appendText("stderr", name + " is not an IWAD, such as doom1.wad or doom2.wad.");
+        return;
+    }
+    const generation = ++doomGeneration;
+    doom = null;
+    const module = await doomModule;
+    if (generation !== doomGeneration) {
+        return; // another game was started meanwhile
+    }
+    memory = new WebAssembly.Memory({ initial : 108 });
+    const instance = await WebAssembly.instantiate(module, makeImportObject());
+    if (generation !== doomGeneration) {
+        return;
+    }
+    const exports = instance.exports;
 
-    /*mobile touch input*/
-    [["enterButton", 13],
-     ["leftButton", 0xac],
-     ["rightButton", 0xae],
-     ["upButton", 0xad],
-     ["downButton", 0xaf],
-     ["ctrlButton", 0x80+0x1d],
-     ["spaceButton", 32],
-     ["altButton", 0x80+0x38]].forEach(([elementID, keyCode]) => {
-        console.log(elementID + " for " + keyCode);
-        var button = document.getElementById(elementID);
-        //button.addEventListener("click", () => {keyDown(keyCode); keyUp(keyCode)} );
-        button.addEventListener("touchstart", () => {resumeAudio(); keyDown(keyCode);});
-        button.addEventListener("touchend", () => keyUp(keyCode));
-        button.addEventListener("touchcancel", () => keyUp(keyCode));
-    });
+    const wadPointer = exports.doom_iwad_buffer(wad.length);
+    new Uint8Array(memory.buffer, wadPointer, wad.length).set(wad);
+    appendText("log", "Starting DooM with " + name);
 
-    /*hint that the canvas should have focus to capute keyboard events*/
-    const focushint = document.getElementById("focushint");
-    const printFocusInHint = function(e) {
-        focushint.innerText = "Keyboard events will be captured as long as the the DOOM canvas has focus.";
-        focushint.style.fontWeight = "normal";
-    };
-    canvas.addEventListener('focusin', printFocusInHint, false);
-    canvas.addEventListener('pointerdown', resumeAudio, false);
+    /*Initialize Doom*/
+    try {
+        exports.main();
+    } catch (e) {
+        appendText("stderr", "DooM failed to start with " + name + ": " + e);
+        return;
+    }
+    startAudio(exports);
+    doom = exports;
+}
 
-    canvas.addEventListener('focusout', function(e) {
-        focushint.innerText = "Click on the canvas to capute input and start playing.";
-        focushint.style.fontWeight = "bold";
-    }, false);
+async function fetchIwad(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error("HTTP " + response.status);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+}
 
+/*The shareware doom1.wad comes with this page. ?wad=doom2.wad plays an IWAD next to it instead.*/
+const wadUrl = new URLSearchParams(window.location.search).get("wad") || "doom1.wad";
+fetchIwad(wadUrl).then(
+    wad => startDoom(wad, wadUrl),
+    e => appendText("stderr", "Could not load " + wadUrl + " (" + e.message + "). Put it next to index.html, or pick your own IWAD above."));
+
+/*Play your own IWAD, e.g. doom2.wad. It is read locally and never uploaded.*/
+document.getElementById("wadFile").addEventListener("change", async function(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        return;
+    }
+    const wad = new Uint8Array(await file.arrayBuffer());
+    await startDoom(wad, file.name);
     canvas.focus();
-    printFocusInHint();
+});
 
-    /*printing stats*/
-    const animationfps_stats = document.getElementById("animationfps_stats");
-    var number_of_animation_frames = 0; // in current second
-    window.setInterval(function(){
-        animationfps_stats.innerText = number_of_animation_frames;
-        number_of_animation_frames = 0;
-    }, 1000);
 
-    /*Main game loop*/
-    function step(timestamp) {
-        ++number_of_animation_frames;
-        obj.instance.exports.doom_loop_step();
-        pumpAudio(obj.instance.exports);
-        window.requestAnimationFrame(step);
+/*input handling*/
+let doomKeyCode = function(keyCode) {
+    // Doom seems to use mostly the same keycodes, except for the following (maybe I'm missing a few.)
+    switch (keyCode) {
+    case 8:
+        return 127; // KEY_BACKSPACE
+    case 17:
+        return (0x80+0x1d); // KEY_RCTRL
+    case 18:
+        return (0x80+0x38); // KEY_RALT
+    case 37:
+        return 0xac; // KEY_LEFTARROW
+    case 38:
+        return 0xad; // KEY_UPARROW
+    case 39:
+        return 0xae; // KEY_RIGHTARROW
+    case 40:
+        return 0xaf; // KEY_DOWNARROW
+    default:
+        if (keyCode >= 65 /*A*/ && keyCode <= 90 /*Z*/) {
+        return keyCode + 32; // ASCII to lower case
+        }
+        if (keyCode >= 112 /*F1*/ && keyCode <= 123 /*F12*/ ) {
+        return keyCode + 75; // KEY_F1
+        }
+        return keyCode;
+    }
+};
+let keyDown = function(keyCode) {if (doom) doom.add_browser_event(0 /*KeyDown*/, keyCode);};
+let keyUp = function(keyCode) {if (doom) doom.add_browser_event(1 /*KeyUp*/, keyCode);};
+
+/*keyboard input*/
+canvas.addEventListener('keydown', function(event) {
+    resumeAudio();
+    keyDown(doomKeyCode(event.keyCode));
+    event.preventDefault();
+}, false);
+canvas.addEventListener('keyup', function(event) {
+    keyUp(doomKeyCode(event.keyCode));
+    event.preventDefault();
+}, false);
+
+/*mobile touch input*/
+[["enterButton", 13],
+ ["leftButton", 0xac],
+ ["rightButton", 0xae],
+ ["upButton", 0xad],
+ ["downButton", 0xaf],
+ ["ctrlButton", 0x80+0x1d],
+ ["spaceButton", 32],
+ ["altButton", 0x80+0x38]].forEach(([elementID, keyCode]) => {
+    console.log(elementID + " for " + keyCode);
+    var button = document.getElementById(elementID);
+    //button.addEventListener("click", () => {keyDown(keyCode); keyUp(keyCode)} );
+    button.addEventListener("touchstart", () => {resumeAudio(); keyDown(keyCode);});
+    button.addEventListener("touchend", () => keyUp(keyCode));
+    button.addEventListener("touchcancel", () => keyUp(keyCode));
+});
+
+/*hint that the canvas should have focus to capute keyboard events*/
+const focushint = document.getElementById("focushint");
+const printFocusInHint = function(e) {
+    focushint.innerText = "Keyboard events will be captured as long as the the DOOM canvas has focus.";
+    focushint.style.fontWeight = "normal";
+};
+canvas.addEventListener('focusin', printFocusInHint, false);
+canvas.addEventListener('pointerdown', resumeAudio, false);
+
+canvas.addEventListener('focusout', function(e) {
+    focushint.innerText = "Click on the canvas to capute input and start playing.";
+    focushint.style.fontWeight = "bold";
+}, false);
+
+canvas.focus();
+printFocusInHint();
+
+/*printing stats*/
+const animationfps_stats = document.getElementById("animationfps_stats");
+var number_of_animation_frames = 0; // in current second
+window.setInterval(function(){
+    animationfps_stats.innerText = number_of_animation_frames;
+    number_of_animation_frames = 0;
+}, 1000);
+
+/*Main game loop*/
+function step(timestamp) {
+    ++number_of_animation_frames;
+    if (doom) {
+        try {
+            doom.doom_loop_step();
+            pumpAudio(doom);
+        } catch (e) {
+            appendText("stderr", "DooM stopped: " + e);
+            doom = null;
+        }
     }
     window.requestAnimationFrame(step);
-});
+}
+window.requestAnimationFrame(step);

@@ -255,7 +255,7 @@ default_t	defaults[] =
 // UNIX hack, to be removed. 
 #ifdef SNDSERV
     {"sndserver", (int *) &sndserver_filename, (int) "sndserver"},
-    {"mb_used", &mb_used, 2},
+    {"mb_used", &mb_used, 16},  // Doom II has bigger levels and more sounds than the shareware episode
 #endif
     
 #endif

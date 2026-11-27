@@ -26,6 +26,6 @@ Play doom at <https://diekmann.github.io/wasm-fizzbuzz/doom/>, deployed from (Pa
 
 ---
 
-This is a fork of [diekmann/wasm-fizzbuzz](https://github.com/diekmann/wasm-fizzbuzz) that adds sound effects and music to DooM, plays the demos on the title screen, and builds with current LLVM.
+This is a fork of [diekmann/wasm-fizzbuzz](https://github.com/diekmann/wasm-fizzbuzz) that adds sound effects and music to DooM, plays the demos on the title screen, runs DOOM II with your own `doom2.wad`, and builds with current LLVM.
 See [Changes in this fork](doom/README.md#changes-in-this-fork).
 

@@ -12,6 +12,7 @@ gh-pages: all
 	cp -a ./doom/index.html ./public/doom/
 	cp -a ./doom/main.js ./public/doom/
 	cp -a ./doom/doom.wasm ./public/doom/
+	cp -L ./doom/doom1.wad ./public/doom/
 
 clean:
 	rm -rf ./public
