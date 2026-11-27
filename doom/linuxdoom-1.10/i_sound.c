@@ -270,7 +270,7 @@ void I_InitSound()
 	}
     }
 
-    fprintf(stderr, "I_InitSound: sound effects cached.\n");
+    printf("I_InitSound: sound effects cached.\n");
 
     I_InitMusic();
 }
@@ -281,7 +281,7 @@ void I_InitMusic(void)
 	return;
 
     I_MUS_Init(W_CacheLumpName("GENMIDI", PU_STATIC));
-    fprintf(stderr, "I_InitMusic: OPL music ready.\n");
+    printf("I_InitMusic: OPL music ready.\n");
 }
 
 void I_ShutdownMusic(void)
